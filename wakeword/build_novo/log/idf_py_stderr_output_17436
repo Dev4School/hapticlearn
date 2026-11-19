@@ -1,0 +1,24 @@
+Command: cmake -G Ninja -B D:\Haptic-Learn\WakeWord\wakeword\build_novo -DPYTHON_DEPS_CHECKED=1 -DPYTHON=C:\Espressif\tools\python\v6.1\venv\Scripts\python.exe -DESP_PLATFORM=1 -DIDF_TARGET=esp32s3 -DCCACHE_ENABLE=True D:\Haptic-Learn\WakeWord\wakeword
+CMake Warning at C:/esp-idf/v6.1/esp-idf/tools/cmake/build.cmake:711 (message):
+  WARNING: Unknown error: Cannot parse components lock file.  Please check
+  that
+
+          D:\Haptic-Learn\WakeWord\wakeword\dependencies.lock
+
+  is a valid lock YAML file.
+
+  You can delete corrupted lock file and it will be recreated on next run.
+  Some
+
+  components may be updated in this case., recreating lock file.
+
+Call Stack (most recent call first):
+  C:/esp-idf/v6.1/esp-idf/tools/cmake/project.cmake:868 (idf_build_process)
+  CMakeLists.txt:8 (project)
+
+
+Loading defaults file D:/Haptic-Learn/WakeWord/wakeword/sdkconfig.defaults...
+Loading defaults file D:/Haptic-Learn/WakeWord/wakeword/sdkconfig.defaults.esp32s3...
+NOTE: Kconfig parser version: 1
+NOTE: Kconfig defaults policy: use sdkconfig
+NOTE: Status: Finished successfully

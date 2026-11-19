@@ -1,0 +1,65 @@
+WAKEWORD ESP32-S3 — CONFIGURACAO E EXECUCAO
+
+HARDWARE
+Microfone INMP441 com a placa desligada:
+  ESP32-S3  -> INMP441
+  3V3       -> VDD (nunca ligue em 5 V)
+  GND       -> GND
+  GPIO 4    -> SCK/BCLK
+  GPIO 5    -> WS/LRCL
+  GPIO 6    -> SD/DOUT
+  L/R       -> GND (canal esquerdo)
+
+Use cabo USB de dados. O furo do microfone deve ficar livre.
+
+PRE-REQUISITOS
+- ESP-IDF 6.1 instalado (o projeto usa C:\esp\v6.1\esp-idf).
+- ESP32-S3 com flash de 16 MB e PSRAM octal.
+- ESP-SR 2.6.0 e dependencias baixadas pelo ESP-IDF Component Manager.
+
+PREPARAR O TERMINAL
+Abra um PowerShell na pasta do projeto. Repita a ativacao do ESP-IDF em cada
+terminal novo:
+
+  cd D:\Haptic-Learn\WakeWord\wakeword
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+  $env:PYTHONIOENCODING="utf-8"
+  . "C:\esp\v6.1\esp-idf\export.ps1"
+
+Se o ESP-IDF estiver instalado em outro local, ajuste o caminho do export.ps1.
+
+CONFIGURAR UMA VEZ
+O sdkconfig existente pode ter outro alvo. Na primeira configuracao (ou ao
+trocar de chip), execute:
+
+  idf.py set-target esp32s3
+
+Esse comando recria o sdkconfig usando sdkconfig.defaults e
+sdkconfig.defaults.esp32s3: flash 16 MB, PSRAM octal e somente o modelo
+WakeNet wn9_hiesp na particao model. A tabela partitions.csv reserva essa
+particao. Nao e necessario abrir menuconfig nem baixar/gravar o modelo
+manualmente. A configuracao e mantida entre execucoes.
+
+COMPILAR, GRAVAR E EXECUTAR
+Em cada sessao:
+
+  idf.py build
+  idf.py -p COMx flash monitor
+
+Troque COMx pela porta da placa (por exemplo, COM3). O comando flash grava o
+firmware, a tabela de particoes e a imagem srmodels.bin criada pelo ESP-SR.
+Feche outros programas que estejam usando a porta serial. Para sair do monitor,
+pressione Ctrl+].
+
+RESULTADO ESPERADO
+O monitor deve mostrar o modelo wn9_hiesp e "Escutando...". Fale "Hi, ESP" em
+ingles perto do microfone; a deteccao aparece como:
+  >>> WAKEWORD DETECTADA! <<<
+
+SOLUCAO DE PROBLEMAS
+- "Failed to connect": confira COMx e o cabo de dados; feche monitores abertos.
+  Se preciso, segure BOOT, pressione e solte EN/RESET e tente flash novamente.
+- Sem modelo: confirme que o alvo e esp32s3 e rode "idf.py build" e
+  "idf.py -p COMx flash monitor"; o modelo e incluído no flash automaticamente.
+- Sem deteccao: confira GPIOs, alimentacao 3V3 e L/R ligado ao GND.
+- "idf.py" nao encontrado: reative o ambiente ESP-IDF no terminal.

@@ -1,0 +1,22 @@
+Command: ninja all
+Loading defaults file D:/Haptic-Learn/WakeWord/wakeword/sdkconfig.defaults...
+Loading defaults file D:/Haptic-Learn/WakeWord/wakeword/sdkconfig.defaults.esp32s3...
+NOTE: Kconfig parser version: 1
+NOTE: Kconfig defaults policy: use sdkconfig
+NOTE: Status: Finished successfully
+CMake Error at C:/esp-idf/v6.1/esp-idf/tools/cmake/component.cmake:494 (add_library):
+  Cannot find source file:
+
+    D:/Haptic-Learn/WakeWord/wakeword/main/wakeword_main.cpp
+Call Stack (most recent call first):
+  main/CMakeLists.txt:1 (idf_component_register)
+
+
+CMake Error at C:/esp-idf/v6.1/esp-idf/tools/cmake/component.cmake:494 (add_library):
+  No SOURCES given to target: __idf_main
+Call Stack (most recent call first):
+  main/CMakeLists.txt:1 (idf_component_register)
+
+
+CMake Generate step failed.  Build files cannot be regenerated correctly.
+ninja: error: rebuilding 'build.ninja': subcommand failed
