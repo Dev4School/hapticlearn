@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
@@ -13,6 +14,7 @@ extern "C" {
 }
 
 static const char *TAG = "WAKEWORD";
+static const char *TAG_MAIN = "MAIN";
 
 #define I2S_BCLK    GPIO_NUM_4
 #define I2S_WS      GPIO_NUM_5
@@ -20,6 +22,10 @@ static const char *TAG = "WAKEWORD";
 #define SAMPLE_RATE 16000
 
 static i2s_chan_handle_t rx_chan;
+
+// Protótipos das Tarefas
+static void wakeword_task(void *arg);
+void TarefaCore1(void *pvParameters);
 
 static void i2s_init()
 {
@@ -50,6 +56,7 @@ static void i2s_init()
     ESP_ERROR_CHECK(i2s_channel_enable(rx_chan));
 }
 
+// Tarefa da WAKEWORD (roda no Core 0)
 static void wakeword_task(void *arg)
 {
     srmodel_list_t *models = esp_srmodel_init("model");
@@ -129,8 +136,31 @@ static void wakeword_task(void *arg)
     }
 }
 
+
+void TarefaCore1(void *pvParameters) {
+    while (1) {
+        ESP_LOGI(TAG_MAIN, "Executando no Core 1");
+        vTaskDelay(pdMS_TO_TICKS(1000)); 
+    }
+}
+
 extern "C" void app_main(void)
 {
+    ESP_LOGI(TAG_MAIN, "--- Inicializando Tarefas no ESP32-S3 ---");
+
     i2s_init();
-    xTaskCreatePinnedToCore(wakeword_task, "wakeword", 8 * 1024, NULL, 5, NULL, 1);
+
+    // WAKEWORD no Core 0 (mesma stack e prioridade da configuracao original)
+    xTaskCreatePinnedToCore(wakeword_task, "wakeword", 8 * 1024, NULL, 5, NULL, 0);
+
+    // Tarefa auxiliar no Core 1
+    xTaskCreatePinnedToCore(
+        TarefaCore1,        
+        "Tarefa_Do_Core1",  
+        4096,               
+        NULL,              
+        1,                 
+        NULL,               
+        1                   
+    );
 }
