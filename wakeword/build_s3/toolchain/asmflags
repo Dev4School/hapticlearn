@@ -1,6 +1,0 @@
--mdisable-hardware-atomics
-"-specs=D:/Haptic-Learn/WakeWord/wakeword/build_s3/specs/picolibc.specs"
--mlongcalls
--fno-builtin-memcpy
--fno-builtin-memset
--fno-builtin-bzero
