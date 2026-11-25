@@ -2,9 +2,11 @@
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
+#include <cmath>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "driver/i2s_std.h"
 
 extern "C" {
@@ -16,16 +18,41 @@ extern "C" {
 static const char *TAG = "WAKEWORD";
 static const char *TAG_MAIN = "MAIN";
 
+// ---- Pinos e áudio ----
 #define I2S_BCLK    GPIO_NUM_4
 #define I2S_WS      GPIO_NUM_5
 #define I2S_DIN     GPIO_NUM_6
 #define SAMPLE_RATE 16000
 
+// ---- Configuração do silêncio ----
+#define SILENCE_TIMEOUT_MS   4000    // tempo sem fala para desativar o mic
+#define MAX_ACTIVE_MS        60000   // segurança: duração máxima de uma sessão ativa
+#define VOICE_RMS_THRESHOLD  500.0f  // AJUSTAR com o seu mic (veja o log de RMS)
+#define DEBUG_RMS            1       // 1 = imprime o RMS no modo ativo para calibrar
+
 static i2s_chan_handle_t rx_chan;
 
-// Protótipos das Tarefas
+// Estado do microfone: true = captando fala, false = só esperando a wake word.
+// Pode ser lido por outras tarefas (Core 1, envio Wi-Fi etc.)
+volatile bool g_mic_active = false;
+
+// Protótipos das tarefas
 static void wakeword_task(void *arg);
 void TarefaCore1(void *pvParameters);
+
+static inline int64_t now_ms()
+{
+    return esp_timer_get_time() / 1000;
+}
+
+static float chunk_rms(const int16_t *pcm, int n)
+{
+    int64_t acc = 0;
+    for (int i = 0; i < n; i++) {
+        acc += (int32_t)pcm[i] * (int32_t)pcm[i];
+    }
+    return sqrtf((float)acc / (float)n);
+}
 
 static void i2s_init()
 {
@@ -43,7 +70,7 @@ static void i2s_init()
             .ws   = I2S_WS,
             .dout = I2S_GPIO_UNUSED,
             .din  = I2S_DIN,
-                        .invert_flags = {
+            .invert_flags = {
                 .mclk_inv = 0,
                 .bclk_inv = 0,
                 .ws_inv   = 0,
@@ -56,7 +83,7 @@ static void i2s_init()
     ESP_ERROR_CHECK(i2s_channel_enable(rx_chan));
 }
 
-// Tarefa da WAKEWORD (roda no Core 0)
+// Tarefa da WAKEWORD + controle de silêncio (roda no Core 0)
 static void wakeword_task(void *arg)
 {
     srmodel_list_t *models = esp_srmodel_init("model");
@@ -112,6 +139,10 @@ static void wakeword_task(void *arg)
 
     ESP_LOGI(TAG, "Escutando... (%d amostras por bloco)", chunk);
 
+    int64_t active_start = 0;
+    int64_t last_voice   = 0;
+    int     dbg_counter  = 0;
+
     while (true) {
         size_t bytes_read = 0;
         i2s_channel_read(rx_chan, samples, chunk * sizeof(int32_t), &bytes_read, portMAX_DELAY);
@@ -120,6 +151,7 @@ static void wakeword_task(void *arg)
             continue;
         }
 
+        // Converte 32 bits (INMP441) para 16 bits
         for (int i = 0; i < chunk; i++) {
             int32_t s = samples[i] >> 14;
             if (s > 32767)  s = 32767;
@@ -128,19 +160,51 @@ static void wakeword_task(void *arg)
             memcpy(&pcm[i], &sample, sizeof(sample));
         }
 
-        int word = wakenet->detect(model_data, pcm);
-        if (word > 0) {
-            ESP_LOGI(TAG, ">>> WAKEWORD DETECTADA: %s <<<",
-                     wakenet->get_word_name(model_data, word));
+        if (!g_mic_active) {
+            // ===== MODO ESPERA: só procura a wake word =====
+            int word = wakenet->detect(model_data, pcm);
+            if (word > 0) {
+                ESP_LOGI(TAG, ">>> WAKEWORD DETECTADA: %s <<<",
+                         wakenet->get_word_name(model_data, word));
+                g_mic_active = true;
+                active_start = last_voice = now_ms();
+                dbg_counter = 0;
+            }
+        } else {
+            // ===== MODO ATIVO: captando fala =====
+            float   rms = chunk_rms(pcm, chunk);
+            int64_t t   = now_ms();
+
+            if (rms > VOICE_RMS_THRESHOLD) {
+                last_voice = t;
+            }
+
+#if DEBUG_RMS
+            // ~1 log por segundo (bloco de 512 amostras a 16 kHz = 32 ms)
+            if (++dbg_counter >= 30) {
+                dbg_counter = 0;
+                ESP_LOGI(TAG, "rms=%.0f  silencio=%lld ms", rms, (long long)(t - last_voice));
+            }
+#endif
+
+            // TODO: aqui você envia 'pcm' para o Core 1 (filtro 75-500 Hz + pYIN)
+            //       e/ou grava o áudio original para a transcrição
+
+            if ((t - last_voice) > SILENCE_TIMEOUT_MS ||
+                (t - active_start) > MAX_ACTIVE_MS) {
+                ESP_LOGI(TAG, "Silencio detectado -> mic desativado");
+                g_mic_active = false;
+            }
         }
     }
 }
 
-
-void TarefaCore1(void *pvParameters) {
+// Tarefa auxiliar no Core 1 (placeholder do pYIN / vibração)
+void TarefaCore1(void *pvParameters)
+{
     while (1) {
-        ESP_LOGI(TAG_MAIN, "Executando no Core 1");
-        vTaskDelay(pdMS_TO_TICKS(1000)); 
+        ESP_LOGI(TAG_MAIN, "Core 1 | mic %s", g_mic_active ? "ATIVO" : "em espera");
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -150,17 +214,17 @@ extern "C" void app_main(void)
 
     i2s_init();
 
-    // WAKEWORD no Core 0 (mesma stack e prioridade da configuracao original)
+    // WAKEWORD no Core 0
     xTaskCreatePinnedToCore(wakeword_task, "wakeword", 8 * 1024, NULL, 5, NULL, 0);
 
     // Tarefa auxiliar no Core 1
     xTaskCreatePinnedToCore(
-        TarefaCore1,        
-        "Tarefa_Do_Core1",  
-        4096,               
-        NULL,              
-        1,                 
-        NULL,               
-        1                   
+        TarefaCore1,
+        "Tarefa_Do_Core1",
+        4096,
+        NULL,
+        1,
+        NULL,
+        1
     );
 }
