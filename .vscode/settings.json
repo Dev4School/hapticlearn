@@ -1,4 +1,4 @@
 {
-    "cmake.sourceDirectory": "D:/Haptic-Learn/hapticlearn/wakeword",
-    "idf.currentSetup": "C:\\esp\\v6.1\\esp-idf"
+    "cmake.sourceDirectory": "C:/Users/Jolea/Documents/HAPTIC_LEARN/hapticlearn/wakeword",
+    "idf.currentSetup": "C:\\esp\\v6.1.1\\esp-idf"
 }
